@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Net Debt / EBITDA dashboard</title>
+<style>
+:root{--bg:#f3f6f9;--panel:#fff;--ink:#14212e;--mute:#5d6b7a;--line:#d5dde5;--accent:#0b6e8a;--grid:#e3e9ef}
+@media (prefers-color-scheme:dark){:root{--bg:#0e161d;--panel:#16212b;--ink:#e6edf3;--mute:#93a2b1;--line:#2b3a47;--accent:#4cc3e3;--grid:#223039}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:960px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:22px;margin:0 0 16px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+label{display:block;font-size:13px;color:var(--mute);margin-bottom:4px}
+select,input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+.chartwrap{overflow-x:auto}
+svg{width:100%;height:auto;display:block;min-width:420px}
+.note{color:var(--mute);font-size:13px;margin-top:8px}
+.msg{padding:40px 8px;text-align:center;color:var(--mute)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Net Debt / EBITDA dashboard</h1>
+  <div class="panel controls">
+    <div><label for="ticker">Company</label><select id="ticker"></select></div>
+    <div><label for="title">Chart title</label><input id="title" type="text" placeholder="Defaults to ticker + metric"></div>
+    <div><label for="xl">X-axis attribute</label><input id="xl" type="text" value="Fiscal year (ending March)"></div>
+    <div><label for="yl">Y-axis attribute</label><input id="yl" type="text" value="Net Debt / EBITDA (x)"></div>
+  </div>
+  <div class="panel"><div class="chartwrap" id="chart"></div><div class="note" id="note"></div></div>
+</main>
+<script>
+(function(){
+  var $=function(i){return document.getElementById(i)}, data=null;
+  function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+  function css(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim()}
+  function nice(r,n){var raw=r/n,m=Math.pow(10,Math.floor(Math.log10(raw))),f=raw/m;return(f<=1?1:f<=2?2:f<=5?5:10)*m}
+
+  function draw(){
+    var host=$("chart");
+    if(!data||!data.series||data.series.length<2){host.innerHTML='<div class="msg">Not enough data to plot for this company.</div>';return}
+    var pts=data.series,W=720,H=400,m={l:64,r:24,t:56,b:70},iw=W-m.l-m.r,ih=H-m.t-m.b;
+    var ys=pts.map(function(p){return p.y}),lo=Math.min(0,Math.min.apply(null,ys)),hi=Math.max(0,Math.max.apply(null,ys));
+    if(lo===hi)hi=lo+1;
+    var st=nice(hi-lo,5),min=Math.floor(lo/st)*st,max=Math.ceil(hi/st)*st;
+    var sx=function(i){return m.l+i*iw/(pts.length-1)},sy=function(v){return m.t+ih-(v-min)/(max-min)*ih};
+    var ink=css("--ink"),mute=css("--mute"),grid=css("--grid"),acc=css("--accent"),panel=css("--panel");
+    var title=$("title").value||(data.ticker+": "+data.metric);
+    var s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(title)+'" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,sans-serif">';
+    s+='<text x="'+m.l+'" y="30" font-size="17" font-weight="600" fill="'+ink+'">'+esc(title)+'</text>';
+    for(var v=min;v<=max+st/1e6;v+=st){var y=sy(v);
+      s+='<line x1="'+m.l+'" x2="'+(W-m.r)+'" y1="'+y+'" y2="'+y+'" stroke="'+grid+'"/><text x="'+(m.l-8)+'" y="'+(y+4)+'" font-size="12" text-anchor="end" fill="'+mute+'">'+(+v.toFixed(2))+'</text>';}
+    s+='<line x1="'+m.l+'" x2="'+m.l+'" y1="'+m.t+'" y2="'+(m.t+ih)+'" stroke="'+mute+'"/><line x1="'+m.l+'" x2="'+(W-m.r)+'" y1="'+(m.t+ih)+'" y2="'+(m.t+ih)+'" stroke="'+mute+'"/>';
+    s+='<path d="'+pts.map(function(p,i){return(i?"L":"M")+sx(i).toFixed(1)+" "+sy(p.y).toFixed(1)}).join(" ")+'" fill="none" stroke="'+acc+'" stroke-width="3" stroke-linejoin="round"/>';
+    pts.forEach(function(p,i){var cx=sx(i),cy=sy(p.y);
+      s+='<circle cx="'+cx+'" cy="'+cy+'" r="5" fill="'+panel+'" stroke="'+acc+'" stroke-width="3"><title>'+esc(p.x)+': '+p.y+'</title></circle>';
+      s+='<text x="'+cx+'" y="'+(cy-12)+'" font-size="12" font-weight="600" text-anchor="middle" fill="'+ink+'">'+p.y+'</text>';
+      s+='<text x="'+cx+'" y="'+(m.t+ih+20)+'" font-size="12" text-anchor="middle" fill="'+mute+'">'+esc(p.x)+'</text>';});
+    s+='<text x="'+(m.l+iw/2)+'" y="'+(H-14)+'" font-size="13" text-anchor="middle" fill="'+ink+'">'+esc($("xl").value)+'</text>';
+    s+='<text transform="translate(16 '+(m.t+ih/2)+') rotate(-90)" font-size="13" text-anchor="middle" fill="'+ink+'">'+esc($("yl").value)+'</text></svg>';
+    host.innerHTML=s;
+    $("note").textContent="Data last updated: "+data.updated;
+  }
+
+  function load(t){
+    fetch("data/"+encodeURIComponent(t)+".json",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.json()})
+      .then(function(d){data=d;draw()}).catch(function(){data=null;$("note").textContent="";$("chart").innerHTML='<div class="msg">Could not load data for '+esc(t)+'.</div>'});
+  }
+
+  fetch("data/index.json",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(list){
+    if(!list.length)throw 0;
+    $("ticker").innerHTML=list.map(function(t){return'<option>'+esc(t)+'</option>'}).join("");
+    load(list[0]);
+  }).catch(function(){$("chart").innerHTML='<div class="msg">No data yet. Run the "Fetch Screener data" workflow first.</div>'});
+
+  $("ticker").onchange=function(){load(this.value)};
+  ["title","xl","yl"].forEach(function(i){$(i).addEventListener("input",draw)});
+})();
+</script>
+</body>
+</html>
