@@ -77,6 +77,8 @@ def main():
         except Exception as e:
             failures += 1
             print(f"{t}: failed ({type(e).__name__}: {e})")
+    names = sorted(f.stem for f in OUT_DIR.glob("*.json") if f.stem != "index")
+    (OUT_DIR / "index.json").write_text(json.dumps(names))
     if failures == len(tickers):
         sys.exit(1)
 
