@@ -44,7 +44,6 @@ def fetch(ticker):
 
 def net_debt_ebitda(ticker):
     soup = fetch(ticker)
-    print(soup)
     bs = read_table(soup, "balance-sheet")
     pl = read_table(soup, "profit-loss")
     borrowings, investments = bs["Borrowings"], bs.get("Investments", {})
